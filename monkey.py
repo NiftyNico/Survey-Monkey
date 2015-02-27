@@ -1,15 +1,18 @@
 import sys
 import random
 import math
+import names
+import threading
 from selenium import webdriver
 
 if len(sys.argv) < 2:
   print('Please provide a url to open')
   quit(1)
 
-numTimesToFill = 10
-if len(sys.argv) >= 3:
-  numTimesToFill = int(sys.argv[2])
+numTimesToFill = int(sys.argv[2]) if len(sys.argv) >= 3 else 10
+
+numThreads =  int(sys.argv[3]) if len(sys.argv) >= 4 else 2
+threadSpawnSemaphore = threading.BoundedSemaphore(numThreads)
 
 url = sys.argv[1]; 
 
@@ -42,6 +45,11 @@ def fillGoogleForm (url):
   radioQuestions = browser.find_elements_by_xpath("//*[@role='radiogroup']")
   selectOneRadioOptionPerQuestion(radioQuestions)
 
+  #browser.find_element_by_css_selector("#group_119697588_1").click()
+
+  #nameField = browser.find_element_by_xpath("//input[@type='text']")
+  #nameField.send_keys(names.get_full_name())
+
   clickSubmitButton(browser)
 
   browser.quit()
@@ -63,19 +71,23 @@ def fillStrawPoll (url):
   selectRandomOption(options)
 
   clickSubmitButton(browser)
-
   browser.quit()
 
-def fillSurvey (url):
+def fillSurvey (url, surveyNum):
   if 'strawpoll' in url:
     fillStrawPoll(url)
   if 'google' in url:
     fillGoogleForm(url)
   else:
     fillSurveyMonkey(url)
+  print("Completed survey %d" % surveyNum)
+  threadSpawnSemaphore.release()
 
-surveyNum = 0
-while surveyNum < numTimesToFill:
-  fillSurvey(url)
-  surveyNum += 1
-  print('Filled survey num %d' % surveyNum)
+numCompleted = 0
+while numCompleted < numTimesToFill:
+  threadSpawnSemaphore.acquire()
+  numCompleted += 1
+  t = threading.Thread(target=fillSurvey, args = (url, numCompleted))
+  t.dameon = True
+  t.start()
+
